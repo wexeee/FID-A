@@ -1,9 +1,10 @@
 %io_loadspec_twix.m
 %Jamie Near, McGill University 2014.
 %Edits from Franck Lamberton, 2017.
+%Major edits from Will Clarke in 2018 to add in imaLoopAssignment argument
 %
 % USAGE:
-% out=io_loadspec_twix(filename);
+% out=io_loadspec_twix(filename,imaLoopAssignment);
 % 
 % DESCRIPTION:
 % Reads in siemens twix raw data (.dat file) using the mapVBVD.m and 
@@ -16,6 +17,7 @@
 % 
 % INPUTS:
 % filename   = filename of Siemens twix data to load.
+% imaLoopAssignment = 
 %
 % OUTPUTS:
 % out        = Input dataset in FID-A structure format.
@@ -32,6 +34,8 @@ function out=io_loadspec_twix_wtc(filename,imaLoopAssignment)
 
 if nargin ==1
     imaLoopAssignment = {};
+elseif iscell(imaLoopAssignment)&&isempty(imaLoopAssignment)
+    
 else
     if ~iscell(imaLoopAssignment)||~all(size(imaLoopAssignment)==[2 5])
         error('imaLoopAssignment must be a cell array of strings in the format {''t'',''coils'',''averages'',''subSpecs'',''extras'';'' '','' '','' '','' '','' ''}');
@@ -154,7 +158,11 @@ elseif ~isempty(strfind(sequence,'svs_se')) ||... %Is this the Siemens PRESS seq
         ~isempty(strfind(sequence,'svs_st'));    % or the Siemens STEAM sequence?
     %isSiemens
     if isempty(imaLoopAssignment)
-        imaLoopAssignment = {};
+        if isVB
+            imaLoopAssignment ={'t','coils','averages','subSpecs','extras';'Col','Cha','Set','',''};
+        else %VD/E
+            imaLoopAssignment ={'t','coils','averages','subSpecs','extras';'Col','Cha','Ave','',''};
+        end
     end
     
     %noticed that in the Siemens PRESS and STEAM sequences, there is sometimes
@@ -412,7 +420,11 @@ out.flags.filtered=0;
 out.flags.zeropadded=0;
 out.flags.freqcorrected=0;
 out.flags.phasecorrected=0;
-out.flags.averaged=0;
+if out.averages == 1
+    out.flags.averaged=1;
+else
+    out.flags.averaged= 0;
+end
 out.flags.addedrcvrs=0;
 out.flags.subtracted=0;
 out.flags.writtentotext=0;
