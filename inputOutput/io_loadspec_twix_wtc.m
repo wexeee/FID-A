@@ -4,7 +4,7 @@
 %Major edits from Will Clarke in 2018 to add in imaLoopAssignment argument
 %
 % USAGE:
-% out=io_loadspec_twix(filename,imaLoopAssignment);
+% out=io_loadspec_twix_wtc(filename,imaLoopAssignment);
 % 
 % DESCRIPTION:
 % Reads in siemens twix raw data (.dat file) using the mapVBVD.m and 
@@ -17,8 +17,12 @@
 % 
 % INPUTS:
 % filename   = filename of Siemens twix data to load.
-% imaLoopAssignment = 
-%
+% imaLoopAssignment = cell array of strings in the format {''t'',''coils'',''averages'',''subSpecs'',''extras'';'' '','' '','' '','' '','' ''}
+%                       The second line should be e.g.
+%                       'Col','Cha','Ave','Set','' to flexibly link the MDH
+%                       dimensions to the FID A labels. Defaults exist and
+%                       and empty cell array will attempt to use these as
+%                       per J Near's original code.
 % OUTPUTS:
 % out        = Input dataset in FID-A structure format.
 
@@ -38,7 +42,9 @@ elseif iscell(imaLoopAssignment)&&isempty(imaLoopAssignment)
     
 else
     if ~iscell(imaLoopAssignment)||~all(size(imaLoopAssignment)==[2 5])
-        error('imaLoopAssignment must be a cell array of strings in the format {''t'',''coils'',''averages'',''subSpecs'',''extras'';'' '','' '','' '','' '','' ''}');
+        error(['imaLoopAssignment must be a cell array of strings in the format'...
+               '{''t'',''coils'',''averages'',''subSpecs'',''extras'';'' '','' '','' '','' '','' ''}' ...
+               ' where the second line should be  e.g. ''Col'',''Cha'',''Set'',''Ida''']);
     end
 end
 
@@ -79,10 +85,20 @@ isVE = strcmp(version,'ve');
 %to find the correct sequence name.
 sequence=twix_obj.hdr.Config.SequenceFileName;
 
+%LEftshifing behaviour Adapted from FID-A commit 18960e55c864274b967e88a5cab6187d5acf8b38
+%"Find the number of points acquired before the echo so that this
+%information can be stored in the .pointsToLeftshfit field of the data
+%structure.  Depending on the pulse sequence used to acquire the data, the
+%header location of this parameter is different.  For product PRESS
+%seqeunces, the value is located in twix_obj.image.freeParam(1).  For WIP
+%sequences, the value is located in twix_obj.image.cutOff(1,1).  For CMRR
+%sequences, the value is located in twix_obj.image.iceParam(5,1).  Special
+%thanks to Georg Oeltzschner for decoding all of this."
+
 %Try to find out what sequnece this is:
-if ~isempty(strfind(sequence,'rm_special')) ||...  %Is this Ralf Mekle's SPECIAL sequence?
-        ~isempty(strfind(sequence,'vq_special')) ||... %or the CIBM SPECIAL sequence?
-        ~isempty(strfind(sequence,'jn_svs_special'));  %or Jamie Near's SPECIAL sequence?
+if contains(sequence,'rm_special') ||...  %Is this Ralf Mekle's SPECIAL sequence?
+        contains(sequence,'vq_special') ||... %or the CIBM SPECIAL sequence?
+        contains(sequence,'jn_svs_special')  %or Jamie Near's SPECIAL sequence?
     % isSpecial
     if isempty(imaLoopAssignment)
         if isVD || isVE
@@ -91,6 +107,8 @@ if ~isempty(strfind(sequence,'rm_special')) ||...  %Is this Ralf Mekle's SPECIAL
             imaLoopAssignment = {'t','coils','averages','subSpecs','extras';'Col','Cha','Set','Ida',''};
         end
     end
+    
+    leftshift = twix_obj.image.freeParam(1);
 
     %If this is the SPECIAL sequence, it probably contains both inversion-on
     %and inversion-off subspectra on a single dimension, unless it is the VB
@@ -99,7 +117,7 @@ if ~isempty(strfind(sequence,'rm_special')) ||...  %Is this Ralf Mekle's SPECIAL
     %Both Ralf Mekle's SPECIAL and the VD-VE version of Jamie Near's SPECIAL sequence
     %do not store the subspectra along a separate dimension of the data array,
     %so we will separate them artifically:
-    isjnseq = ~isempty(strfind(sequence,'jn_'));
+    isjnseq = contains(sequence,'jn_');
     if ~(isVB && isjnseq) %Catches any SPECIAL sequence except Jamie Near's VB version.
         squeezedData=squeeze(dOut.data);
         if twix_obj.image.NCol>1 && twix_obj.image.NCha>1
@@ -121,7 +139,7 @@ if ~isempty(strfind(sequence,'rm_special')) ||...  %Is this Ralf Mekle's SPECIAL
         %   Squeeze the data to remove singleton dims
         fids=squeeze(data);
     end
-elseif ~isempty(strfind(sequence,'edit_529')); %Is this WIP 529 (MEGA-PRESS)?
+elseif contains(sequence,'edit_529') %Is this WIP 529 (MEGA-PRESS)?
     %isWIP529
     if isempty(imaLoopAssignment)
         if isVD || isVE
@@ -130,7 +148,10 @@ elseif ~isempty(strfind(sequence,'edit_529')); %Is this WIP 529 (MEGA-PRESS)?
             imaLoopAssignment = {'t','coils','averages','subSpecs','extras';'Col','Cha','Set','Eco',''};
         end
     end
-elseif ~isempty(strfind(sequence,'edit_859')); %Is this WIP 859 (MEGA-PRESS)?
+    
+    leftshift = twix_obj.image.cutOff(1,1);
+
+elseif contains(sequence,'edit_859') %Is this WIP 859 (MEGA-PRESS)?
     %isWIP859
     if isempty(imaLoopAssignment)
         if isVD || isVE
@@ -139,7 +160,10 @@ elseif ~isempty(strfind(sequence,'edit_859')); %Is this WIP 859 (MEGA-PRESS)?
             imaLoopAssignment = {'t','coils','averages','subSpecs','extras';'Col','Cha','Set','Ide',''};
         end
     end
-elseif ~isempty(strfind(sequence,'jn_')); %Is this any one of Jamie Near's sequences?
+    
+    leftshift = twix_obj.image.cutOff(1,1);
+    
+elseif contains(sequence,'jn_') %Is this any one of Jamie Near's sequences?
     %isjnseq
     if isempty(imaLoopAssignment)
         if isVD || isVE
@@ -148,14 +172,20 @@ elseif ~isempty(strfind(sequence,'jn_')); %Is this any one of Jamie Near's seque
             imaLoopAssignment = {'t','coils','averages','subSpecs','extras';'Col','Cha','Set','Ida',''};
         end
     end
-elseif ~isempty(strfind(sequence,'eja_svs_mpress')); %Is this Eddie Auerbach's MEGA-PRESS?
+    
+    leftshift = twix_obj.image.freeParam(1);
+    
+elseif contains(sequence,'eja_svs_mpress') %Is this Eddie Auerbach's MEGA-PRESS?
     %isMinnMP
     if isempty(imaLoopAssignment)
         % Set is the averages dimension for all scanner baselines
         imaLoopAssignment ={'t','coils','averages','subSpecs','extras';'Col','Cha','Set','Eco',''};
     end
-elseif ~isempty(strfind(sequence,'svs_se')) ||... %Is this the Siemens PRESS seqeunce?
-        ~isempty(strfind(sequence,'svs_st'));    % or the Siemens STEAM sequence?
+    
+    leftshift = twix_obj.image.iceParam(5,1);
+    
+elseif contains(sequence,'svs_se') ||... %Is this the Siemens PRESS seqeunce?
+        contains(sequence,'svs_st')     % or the Siemens STEAM sequence?
     %isSiemens
     if isempty(imaLoopAssignment)
         if isVB
@@ -164,6 +194,8 @@ elseif ~isempty(strfind(sequence,'svs_se')) ||... %Is this the Siemens PRESS seq
             imaLoopAssignment ={'t','coils','averages','subSpecs','extras';'Col','Cha','Ave','',''};
         end
     end
+    
+    leftshift = twix_obj.image.freeParam(1);
     
     %noticed that in the Siemens PRESS and STEAM sequences, there is sometimes
     %an extra dimension containing unwanted reference scans or something.  Remove them here.
@@ -190,7 +222,12 @@ else
         else %VD/E
             imaLoopAssignment ={'t','coils','averages','subSpecs','extras';'Col','Cha','Ave','',''};
         end
+   %else this is all sorted already by the manual input
     end
+    
+    leftshift = twix_obj.image.freeParam(1);
+    % TO DO: implement a flexible way of selecting this value.
+
 end
 
 % Interpret imaLoopAssignment into a struct for more readible code below
@@ -409,7 +446,7 @@ out.rawSubspecs=rawSubspecs;
 out.seq=seq;
 out.te=TE/1000;
 out.tr=TR/1000;
-out.pointsToLeftshift=twix_obj.image.freeParam(1);
+out.pointsToLeftshift=leftshift;
 
 
 %FILLING IN THE FLAGS
