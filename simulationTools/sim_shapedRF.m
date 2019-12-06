@@ -63,8 +63,16 @@ if isstr(RF)
     end
     w1max=(RF_struct.tw1*flipAngle)/(Tp*90);
 elseif isstruct(RF)
+    
     RF_struct=RF;
-    w1max=(RF_struct.tw1*flipAngle)/(Tp*180);
+    switch RF_struct.type
+        case 'exc'
+            w1max=(RF_struct.tw1*flipAngle)/(Tp*90);
+        case 'ref'
+            w1max=(RF_struct.tw1*flipAngle)/(Tp*180);
+        case 'inv'
+            w1max=(RF_struct.tw1*flipAngle)/(Tp*180);
+    end
 end
    
 %Determine whether this is a frequency selective pulse or a slice selective
