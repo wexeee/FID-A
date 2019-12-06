@@ -663,7 +663,9 @@ methods
                 end
                 
                 if sum(isnan(block(:)))>0
-                    keyboard
+%                     keyboard
+                    warning('Wtc touch up of nan');
+                    block(isnan(block(:))) = 0.0;
                 end
 
                 if bRemoveOS % remove oversampling in read

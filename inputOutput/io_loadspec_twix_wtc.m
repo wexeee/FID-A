@@ -26,7 +26,7 @@
 % OUTPUTS:
 % out        = Input dataset in FID-A structure format.
 
-function out=io_loadspec_twix_wtc(filename,imaLoopAssignment)
+function out=io_loadspec_twix_wtc(filename,imaLoopAssignment,mdhEvalMask)
 %read in the data using the new mapVBVD.  This code has been adapted to 
 %handle both single RAID files and multi-RAID files.  The vast majority of
 %Siemens twix data comes as a single RAID file, but I've encoundered a few 
@@ -38,14 +38,16 @@ function out=io_loadspec_twix_wtc(filename,imaLoopAssignment)
 
 if nargin ==1
     imaLoopAssignment = {};
-elseif iscell(imaLoopAssignment)&&isempty(imaLoopAssignment)
-    
 else
     if ~iscell(imaLoopAssignment)||~all(size(imaLoopAssignment)==[2 5])
         error(['imaLoopAssignment must be a cell array of strings in the format'...
                '{''t'',''coils'',''averages'',''subSpecs'',''extras'';'' '','' '','' '','' '','' ''}' ...
                ' where the second line should be  e.g. ''Col'',''Cha'',''Set'',''Ida''']);
     end
+end
+
+if nargin <3
+    mdhEvalMask = 'image';
 end
 
 twix_obj=mapVBVD(filename);
@@ -58,10 +60,10 @@ elseif iscell(twix_obj)
     %assume that the data of interest is in the last element of the cell.
     twix_obj=twix_obj{RaidLength};
 end
-dOut.data=twix_obj.image();
-version=twix_obj.image.softwareVersion;
-sqzSize=twix_obj.image.sqzSize; 
-sqzDims=twix_obj.image.sqzDims;
+dOut.data=twix_obj.(mdhEvalMask)();
+version=twix_obj.(mdhEvalMask).softwareVersion;
+sqzSize=twix_obj.(mdhEvalMask).sqzSize; 
+sqzDims=twix_obj.(mdhEvalMask).sqzDims;
 
 data=dOut.data;
 
@@ -90,9 +92,9 @@ sequence=twix_obj.hdr.Config.SequenceFileName;
 %information can be stored in the .pointsToLeftshfit field of the data
 %structure.  Depending on the pulse sequence used to acquire the data, the
 %header location of this parameter is different.  For product PRESS
-%seqeunces, the value is located in twix_obj.image.freeParam(1).  For WIP
-%sequences, the value is located in twix_obj.image.cutOff(1,1).  For CMRR
-%sequences, the value is located in twix_obj.image.iceParam(5,1).  Special
+%seqeunces, the value is located in twix_obj.(mdhEvalMask).freeParam(1).  For WIP
+%sequences, the value is located in twix_obj.(mdhEvalMask).cutOff(1,1).  For CMRR
+%sequences, the value is located in twix_obj.(mdhEvalMask).iceParam(5,1).  Special
 %thanks to Georg Oeltzschner for decoding all of this."
 
 %Try to find out what sequnece this is:
@@ -108,7 +110,7 @@ if contains(sequence,'rm_special') ||...  %Is this Ralf Mekle's SPECIAL sequence
         end
     end
     
-    leftshift = twix_obj.image.freeParam(1);
+    leftshift = twix_obj.(mdhEvalMask).freeParam(1);
 
     %If this is the SPECIAL sequence, it probably contains both inversion-on
     %and inversion-off subspectra on a single dimension, unless it is the VB
@@ -120,7 +122,7 @@ if contains(sequence,'rm_special') ||...  %Is this Ralf Mekle's SPECIAL sequence
     isjnseq = contains(sequence,'jn_');
     if ~(isVB && isjnseq) %Catches any SPECIAL sequence except Jamie Near's VB version.
         squeezedData=squeeze(dOut.data);
-        if twix_obj.image.NCol>1 && twix_obj.image.NCha>1
+        if twix_obj.(mdhEvalMask).NCol>1 && twix_obj.(mdhEvalMask).NCha>1
             data(:,:,:,1)=squeezedData(:,:,1:2:(end-1));
             data(:,:,:,2)=squeezedData(:,:,2:2:end);
             sqzSize=[sqzSize(1) sqzSize(2) sqzSize(3)/2 2];
@@ -149,7 +151,7 @@ elseif contains(sequence,'edit_529') %Is this WIP 529 (MEGA-PRESS)?
         end
     end
     
-    leftshift = twix_obj.image.cutOff(1,1);
+    leftshift = twix_obj.(mdhEvalMask).cutOff(1,1);
 
 elseif contains(sequence,'edit_859') %Is this WIP 859 (MEGA-PRESS)?
     %isWIP859
@@ -161,7 +163,7 @@ elseif contains(sequence,'edit_859') %Is this WIP 859 (MEGA-PRESS)?
         end
     end
     
-    leftshift = twix_obj.image.cutOff(1,1);
+    leftshift = twix_obj.(mdhEvalMask).cutOff(1,1);
     
 elseif contains(sequence,'jn_') %Is this any one of Jamie Near's sequences?
     %isjnseq
@@ -173,7 +175,7 @@ elseif contains(sequence,'jn_') %Is this any one of Jamie Near's sequences?
         end
     end
     
-    leftshift = twix_obj.image.freeParam(1);
+    leftshift = twix_obj.(mdhEvalMask).freeParam(1);
     
 elseif contains(sequence,'eja_svs_mpress') %Is this Eddie Auerbach's MEGA-PRESS?
     %isMinnMP
@@ -182,7 +184,7 @@ elseif contains(sequence,'eja_svs_mpress') %Is this Eddie Auerbach's MEGA-PRESS?
         imaLoopAssignment ={'t','coils','averages','subSpecs','extras';'Col','Cha','Set','Eco',''};
     end
     
-    leftshift = twix_obj.image.iceParam(5,1);
+    leftshift = twix_obj.(mdhEvalMask).iceParam(5,1);
     
 elseif contains(sequence,'svs_se') ||... %Is this the Siemens PRESS seqeunce?
         contains(sequence,'svs_st')     % or the Siemens STEAM sequence?
@@ -190,12 +192,12 @@ elseif contains(sequence,'svs_se') ||... %Is this the Siemens PRESS seqeunce?
     if isempty(imaLoopAssignment)
         if isVB
             imaLoopAssignment ={'t','coils','averages','subSpecs','extras';'Col','Cha','Set','',''};
+            leftshift = twix_obj.(mdhEvalMask).freeParam(1);
         else %VD/E
             imaLoopAssignment ={'t','coils','averages','subSpecs','extras';'Col','Cha','Ave','',''};
+            leftshift = twix_obj.(mdhEvalMask).iceParam(5,1); % WTC - matches the svs_se sequence behaviour... 
         end
-    end
-    
-    leftshift = twix_obj.image.freeParam(1);
+    end        
     
     %noticed that in the Siemens PRESS and STEAM sequences, there is sometimes
     %an extra dimension containing unwanted reference scans or something.  Remove them here.
@@ -225,7 +227,7 @@ else
    %else this is all sorted already by the manual input
     end
     
-    leftshift = twix_obj.image.freeParam(1);
+    leftshift = twix_obj.(mdhEvalMask).freeParam(1);
     % TO DO: implement a flexible way of selecting this value.
 
 end
