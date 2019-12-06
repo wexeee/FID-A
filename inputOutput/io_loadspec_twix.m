@@ -57,14 +57,18 @@ sequence=twix_obj.hdr.Config.SequenceFileName;
 %Try to find out what sequnece this is:
 isSpecial=~isempty(strfind(sequence,'rm_special')) ||...  %Is this Ralf Mekle's SPECIAL sequence?
             ~isempty(strfind(sequence,'vq_special'));  %or the CIBM SPECIAL sequence?
-isjnSpecial=~isempty(strfind(sequence,'jn_svs_special'));  %or Jamie Near's SPECIAL sequence?
+isjnSpecial=~isempty(strfind(sequence,'jn_svs_special')) ||...  %or Jamie Near's SPECIAL sequence?
+            ~isempty(strfind(sequence,'md_Adiab_Special')) ||... %or Masoumeh Dehghani's Adiabatic SPECIAL sequence?
+            ~isempty(strfind(sequence,'md_Inv_special')); %or Masoumeh Dehghani's Inversion Recovery SPECIAL sequence?
 isjnMP=~isempty(strfind(sequence,'jn_MEGA_GABA')); %Is this Jamie Near's MEGA-PRESS sequence?
-isjnseq=~isempty(strfind(sequence,'jn_')); %Is this another one of Jamie Near's sequences?
+isjnseq=~isempty(strfind(sequence,'jn_')) ||... %Is this another one of Jamie Near's sequences 
+        ~isempty(strfind(sequence,'md_'));      %or a sequence derived from Jamie Near's sequences (by Masoumeh Dehghani)?
 isWIP529=~isempty(strfind(sequence,'edit_529')); %Is this WIP 529 (MEGA-PRESS)?
 isWIP859=~isempty(strfind(sequence,'edit_859')); %Is this WIP 859 (MEGA-PRESS)?
-isMinnMP=~isempty(strfind(sequence,'eja_svs_mpress')); %Is this Eddie Auerbach's MEGA-PRESS?
-isSiemens=~isempty(strfind(sequence,'svs_se')) ||... %Is this the Siemens PRESS seqeunce?
-            ~isempty(strfind(sequence,'svs_st'));    % or the Siemens STEAM sequence?
+isMinn=~isempty(strfind(sequence,'eja_svs_')); %Is this one of Eddie Auerbach's (CMRR, U Minnesota) sequences?
+isSiemens=(~isempty(strfind(sequence,'svs_se')) ||... %Is this the Siemens PRESS seqeunce?
+            ~isempty(strfind(sequence,'svs_st'))) && ... % or the Siemens STEAM sequence?
+            isempty(strfind(sequence,'eja_svs'));    %And make sure it's not 'eja_svs_steam'.
 
 %If this is the SPECIAL sequence, it probably contains both inversion-on
 %and inversion-off subspectra on a single dimension, unless it is the VB
@@ -163,7 +167,7 @@ end
 
 %Now index the dimension of the averages
 if strcmp(version,'vd') || strcmp(version,'ve')
-    if isMinnMP
+    if isMinn
         dims.averages=find(strcmp(sqzDims,'Set'));
     else
         dims.averages=find(strcmp(sqzDims,'Ave'));
@@ -208,7 +212,7 @@ if ~isempty(dimsToIndex)
         else
             dims.subSpecs=find(strcmp(sqzDims,'Ida'));
         end
-    elseif isWIP529 || isMinnMP
+    elseif isWIP529 || isMinn
         dims.subSpecs=find(strcmp(sqzDims,'Eco'));
     elseif isWIP859
         dims.subSpecs=find(strcmp(sqzDims,'Ide'));
@@ -365,7 +369,7 @@ if isWIP529 || isWIP859
     leftshift = twix_obj.image.cutOff(1,1);
 elseif isSiemens
     leftshift = twix_obj.image.freeParam(1);
-elseif isMinnMP
+elseif isMinn
     leftshift = twix_obj.image.iceParam(5,1);
 else
     leftshift = twix_obj.image.freeParam(1);
